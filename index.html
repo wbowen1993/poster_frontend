@@ -1,0 +1,248 @@
+<html>
+<head>
+	<link href="index.css" rel="stylesheet">
+	<script src="https://ajax.googleapis.com/ajax/libs/jquery/3.2.1/jquery.min.js"></script>
+	<script src="https://cdnjs.cloudflare.com/ajax/libs/chroma-js/1.3.4/chroma.min.js"></script>
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="https://d3js.org/d3.v4.min.js"></script>
+    <link href="https://fonts.googleapis.com/css?family=Josefin+Sans:100" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css?family=Amaranth" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css?family=Roboto" rel="stylesheet">
+	<title>Poster</title>
+</head>
+<body>
+	<div id='main-wrapper'>
+		<h1>Please select your genere:</h1>
+	</div>
+	<div id='poster-wrapper'>
+		<h1>Selected Genre:</h1>
+		<button onclick='more()'>More</button>
+		<span class='poster'>
+			<div class='img-wrapper' id='poster-0'>
+			</div>
+		</span>
+		<span class='poster'>
+			<div class='img-wrapper' id='poster-1'>
+			</div>
+		</span>
+		<span class='poster'>
+			<div class='img-wrapper' id='poster-2'>
+			</div>
+		</span>
+		<span class='poster'>
+			<div class='img-wrapper' id='poster-3'>
+			</div>
+		</span>
+		<span class='poster'>
+			<div class='img-wrapper' id='poster-4'>
+			</div>
+		</span>
+		<span class='poster'>
+			<div class='img-wrapper' id='poster-5'>
+			</div>
+		</span>
+		<span class='poster'>
+			<div class='img-wrapper' id='poster-6'>
+			</div>
+		</span>
+		<span class='poster'>
+			<div class='img-wrapper' id='poster-7'>
+			</div>
+		</span>
+		<span class='poster'>
+			<div class='img-wrapper' id='poster-8'>
+			</div>
+		</span>
+		<span class='poster'>
+			<div class='img-wrapper' id='poster-9'>
+			</div>
+		</span>
+		<span class='poster'>
+			<div class='img-wrapper' id='poster-10'>
+			</div>
+		</span>
+		<span class='poster'>
+			<div class='img-wrapper' id='poster-11'>
+			</div>
+		</span>
+	</div>
+	<script>
+		var socket = io.connect();
+		var genres = [];
+		var codes = [];
+		var genre;
+		var page = 1;
+		
+		var win_height = $(window).height() - 200,
+		win_width = $(window).width();
+		console.log("WIN_H:"+win_height);
+		console.log("WIN_W:"+win_width);
+		var spacing = 0;
+		var margin = {top: spacing, right: 100, bottom: 80, left: 100};
+		var width = win_width - margin.left - margin.right;
+		var height = win_height - margin.top - margin.bottom;
+
+		var rect = [0,0, width, height];
+		
+		socket.on('genre',function(data){
+			genres = data.genres;
+			codes = data.codes;
+			
+			var n = genres.length,
+			m = n,
+			padding = 6,
+			maxSpeed = 3;
+			var color = chroma.scale(['#ff99bb','#009999']).mode('lch').colors(19);
+			var nodes = [];
+			var base_radius = 52;
+			for (i in d3.range(n)){
+				nodes.push({
+					r: Math.random()*14 + base_radius,
+					color: color[i],
+					index:i,
+					name:genres[i].toString(),
+					code:codes[i]
+				});
+			}
+
+			var svg = d3.select("body").append("svg")
+			.attr("width", width)
+			.attr("height", height)
+			.append("g")
+			.attr("transform", "translate(" + margin.left + "," + margin.top + ")");
+
+			var node_g = svg.append("g")
+				.selectAll(".circle_g")
+				.data(nodes)
+				.enter().append('g')
+				.attr('class','circle_g');
+			var node = node_g.append("circle")
+				.attr("r", function(d){  return d.r })
+				.attr('fill',function(d){ return d.color})
+				.attr('opacity',1)
+				.attr('id',function(d){
+					return d.index;
+				});
+			var text = node_g.append("text")
+					.attr('class','node-text')
+					.attr('text-anchor','middle')
+					.attr('baseline-shift','-24%')
+					.style("font-size", "16px")
+					.attr('fill','white')
+					.text(function (d) {
+						return d.name
+					});
+
+			node.on('mouseover',function(){
+				d3.select(this).transition().duration(500).attr('fill','#ff9900');
+			});
+
+			node.on('mouseout',function(){
+				var id = d3.select(this).attr('id');
+				d3.select(this).transition().duration(500).attr('fill',color[id]);
+			});
+
+			node.on('click',function(d){
+				socket.emit('genre',{
+					code:d.code,
+					name:d.name
+				});
+			});
+
+
+
+			var simulation = d3.forceSimulation()
+				.force("collide",d3.forceCollide( function(d){return d.r + 8 }).iterations(16) )
+				.force("charge", d3.forceManyBody().strength(-100).distanceMin(10).distanceMax(1000))
+				.force("center", d3.forceCenter(width / 2, height / 2))
+				.force("y", d3.forceY(100))
+				.force("x", d3.forceX(0));
+			var ticked = function() {
+				node_g.attr("transform", function (d) {
+					return "translate(" + d.x + "," + d.y + ")";
+				});
+			}  
+
+			simulation
+				.nodes(nodes)
+				.on("tick", ticked);
+		});
+		
+		socket.on('movies',function(data){
+			console.log(data.results);
+			var genre_name = data.genre;
+			var results = [];
+			genre = genre_name;
+			for(var i = 0;i<data.results.length;i++){
+				if(results.length==12)
+					break;
+				if(data.results[i]['vote_average']>0)
+					results.push(data.results[i]);
+			}
+			if(document.getElementsByTagName('svg').length>0){
+				d3.select('#main-wrapper').transition().duration(100).style('margin-top',-200).remove();
+				d3.select('#main-wrapper h1').transition().duration(100).style('opacity',0);
+				d3.selectAll('.circle_g').transition().delay(1000).remove();
+				d3.selectAll('.node-text').transition().duration(1000).style('font-size','0px');
+				d3.selectAll('circle').transition().duration(1000).attr('r',0).attr('opacity',0);
+				d3.select('svg').remove();
+
+				d3.select('#poster-wrapper').style('display','block');
+				$('.poster').animate({
+					opacity: 1
+				}, 1500);
+
+				var h1 = $('#poster-wrapper h1').html();
+				h1 += genre_name;
+				$('#poster-wrapper h1').html(h1);
+			}
+			$('.img-wrapper').animate({
+				opacity:0
+			},500);
+			setTimeout(function(){
+				$('.img-wrapper').empty();
+				$('.img-wrapper').animate({
+					opacity:1
+				},500);
+				var base_url = 'http://image.tmdb.org/t/p/w185/';
+				for(var i = 0;i<results.length;i++){
+					var img_str = '<div class="mask"><p>'+results[i]['title']+'('+results[i]['release_date'].substring(0,4)+')'+'</p></div><img class="poster-img" src='+base_url+results[i]['poster_path']+'>';
+					if(results[i]['vote_average']>9)
+						img_str += "<img class='rating' src='large_5.png'>";
+					else if(results[i]['vote_average']>8)
+						img_str += "<img class='rating' src='large_4_half.png'>";
+					else if(results[i]['vote_average']>7)
+						img_str += "<img class='rating' src='large_4.png'>";
+					else if(results[i]['vote_average']>6)
+						img_str += "<img class='rating' src='large_3_half.png'>";
+					else if(results[i]['vote_average']>5)
+						img_str += "<img class='rating' src='large_3.png'>";
+					else if(results[i]['vote_average']>4)
+						img_str += "<img class='rating' src='large_2_half.png'>";
+					else if(results[i]['vote_average']>3)
+						img_str += "<img class='rating' src='large_2.png'>";
+					else if(results[i]['vote_average']>2)
+						img_str += "<img class='rating' src='large_1_half.png'>";
+					else if(results[i]['vote_average']>1)
+						img_str += "<img class='rating' src='large_1.png'>";
+					else
+						img_str += "<img class='rating' src='large_0.png'>";
+					img_str += '<p class="rating_str">'+parseFloat(results[i]['vote_average']).toFixed(1)+'</p>';
+					$('#poster-'+i).append(img_str);
+				}
+			},500);							
+		});
+
+		function more(){
+			socket.emit('more',{
+				genre:genre,
+				page:++page
+			});
+		}
+
+
+
+		
+	</script>
+</body>
+</html>
